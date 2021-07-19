@@ -24,7 +24,7 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
                     var evaled_args = std.ArrayList(LizpExp).init(&gpa.allocator);
                     for (arg_forms) |arg| {
                         var evaluated_form = try eval(arg, env);
-                        try evaled_args.addOne(evaluated_form);
+                        try evaled_args.append(evaluated_form);
                     }
                     return first_form(&evaled_args.items);
                 },

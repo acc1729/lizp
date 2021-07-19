@@ -24,7 +24,7 @@ pub const LizpEnv = struct {
 
 pub const LizpExpRest = struct {
     exp: LizpExp,
-    rest: []const u8,
+    rest: [][]const u8,
 };
 
 fn lizpSum(list: []const LizpExp) LizpErr!*LizpExp {

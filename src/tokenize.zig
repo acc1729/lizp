@@ -12,9 +12,15 @@ fn tokenizePrepass(str: []const u8) []u8 {
     return buff2;
 }
 
-pub fn tokenize(str: []const u8) std.mem.TokenIterator {
+pub fn tokenize(str: []const u8) ![][]const u8 {
     var prepass = tokenizePrepass(str);
-    return std.mem.tokenize(prepass, " ");
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var list = std.ArrayList([]const u8).init(&gpa.allocator);
+    var tokens = std.mem.tokenize(prepass, " ");
+    while (true) {
+        try list.append(tokens.next() orelse break);
+    }
+    return list.items;
 }
 
 test "tokenizePrepass" {
@@ -24,8 +30,8 @@ test "tokenizePrepass" {
 }
 
 test "tokenize" {
-    var tokens = tokenize("some (parens)");
-    try expect(std.mem.eql(u8, tokens.next() orelse unreachable, "some"));
-    try expect(std.mem.eql(u8, tokens.next() orelse unreachable, "("));
-    try expect(std.mem.eql(u8, tokens.next() orelse unreachable, "parens"));
+    var tokens = try tokenize("some (parens)");
+    try expect(std.mem.eql(u8, tokens[0], "some"));
+    try expect(std.mem.eql(u8, tokens[1], "("));
+    try expect(std.mem.eql(u8, tokens[2], "parens"));
 }
