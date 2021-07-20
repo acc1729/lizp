@@ -50,5 +50,6 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
 // }
 
 pub fn main() anyerror!void {
-    std.log.warn("All your {s} are belong to us!", .{"homies"});
+    std.log.warn("All your '{d:4.}' are belong to us!", .{1.2345});
+    // std.fmt.format;
 }

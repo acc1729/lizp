@@ -6,6 +6,37 @@ pub const LizpExp = union(enum) {
     Number: f64,
     List: []const LizpExp,
     Func: fn ([]const LizpExp) LizpErr!*LizpExp,
+
+    pub fn to_string(self: LizpExp, allocator: *std.mem.Allocator) anyerror![]const u8 {
+        var a = allocator;
+        return switch (self) {
+            .Symbol => self.Symbol,
+            .Number => number: {
+                const space = ' ';
+                var num = try std.fmt.allocPrint(a, "{d}", .{self.Number});
+                var i: usize = 0;
+                for (num) |char, index| {
+                    if (char != space) {
+                        i = index;
+                        break;
+                    }
+                }
+                break :number num[i..num.len];
+            },
+            .List => list: {
+                var string = std.ArrayList(u8).init(a);
+                try string.appendSlice("( ");
+                for (self.List) |exp| {
+                    var intermediate = try exp.to_string(a);
+                    try string.appendSlice(intermediate);
+                    try string.append(' ');
+                }
+                try string.append(')');
+                break :list string.items;
+            },
+            .Func => try std.fmt.allocPrint(a, "Function", .{}), // TODO what to represent a function as?
+        };
+    }
 };
 
 pub const LizpErr = error{
@@ -66,6 +97,56 @@ pub fn defaultEnv() !LizpEnv {
     try env.put("+", LizpExp{ .Func = lizpSum });
     try env.put("-", LizpExp{ .Func = lizpSub });
     return LizpEnv{ .data = env };
+}
+
+test "lizpExp.Number to_string" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const num: LizpExp = LizpExp{ .Number = 1.234 };
+    var res = try num.to_string(&gpa.allocator);
+    try expect(std.mem.eql(u8, res, "1.234"));
+
+    const num2: LizpExp = LizpExp{ .Number = 1.2345678901234 };
+    var res2 = try num2.to_string(&gpa.allocator);
+    try expect(std.mem.eql(u8, res2, "1.2345678901234"));
+}
+
+test "lizpExp.Symbol to_string" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const num: LizpExp = LizpExp{ .Symbol = "my-symbol" };
+    var res = try num.to_string(&gpa.allocator);
+    try expect(std.mem.eql(u8, res, "my-symbol"));
+}
+
+test "lizpExp.List to_string" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const array_of_lizpexp: [3]LizpExp = .{
+        LizpExp{
+            .Symbol = "some-symbol",
+        },
+        LizpExp{
+            .Number = 1,
+        },
+        LizpExp{
+            .Number = 2,
+        },
+    };
+    var slice_of_lizpexp = array_of_lizpexp[0..array_of_lizpexp.len];
+    const exp = LizpExp{ .List = slice_of_lizpexp };
+    var res = try exp.to_string(&gpa.allocator);
+    try expect(std.mem.eql(u8, res, "( some-symbol 1 2 )"));
+    var another_array: [3]LizpExp = .{
+        LizpExp{
+            .Symbol = "left",
+        },
+        exp,
+        LizpExp{
+            .Symbol = "right",
+        },
+    };
+    var another_slice = another_array[0..another_array.len];
+    var another_exp = LizpExp{ .List = another_slice };
+    var another_res = try another_exp.to_string(&gpa.allocator);
+    try expect(std.mem.eql(u8, another_res, "( left ( some-symbol 1 2 ) right )"));
 }
 
 test "lizpSub" {
