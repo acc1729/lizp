@@ -164,3 +164,9 @@ test "lizpSum" {
     try expect(result.* == LizpExp.Number);
     try expect(result.*.Number == 12);
 }
+
+test "defaultEnv" {
+    var env = try defaultEnv();
+    var plus = env.data.get("+") orelse unreachable;
+    try expect(plus == LizpExp.Func);
+}
