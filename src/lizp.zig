@@ -39,15 +39,7 @@ pub const LizpExp = union(enum) {
     }
 };
 
-pub const LizpErr = error{
-    UnexpectedForm,
-    UnexpectedClosingParen,
-    NoClosingParen,
-    NotANumber,
-    NotAFunc,
-    SymbolNotFound,
-    EmptyList,
-};
+pub const LizpErr = error{ UnexpectedForm, UnexpectedClosingParen, NoClosingParen, NotANumber, NotAFunc, SymbolNotFound, EmptyList, OutOfMemory };
 
 pub const LizpEnv = struct {
     data: std.StringHashMap(LizpExp),
