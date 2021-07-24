@@ -7,9 +7,14 @@ const LizpErr = lizp.LizpErr;
 const LizpExp = lizp.LizpExp;
 const LizpExpRest = lizp.LizpExpRest;
 
+pub fn parse(input: [][]const u8) LizpErr!LizpExp {
+    const expression = try parseTokens(input);
+    return expression.exp;
+}
+
 /// Take an array of tokens and parses into a potentially nested
 /// LizpExp, sealed in a LizpExpRest to help with recursion.
-pub fn parse(tokens: [][]const u8) LizpErr!LizpExpRest {
+fn parseTokens(tokens: [][]const u8) LizpErr!LizpExpRest {
     var token = tokens[0];
     if (std.mem.eql(u8, token, "(")) {
         return parseRest(tokens[1..tokens.len]);
@@ -22,14 +27,14 @@ pub fn parse(tokens: [][]const u8) LizpErr!LizpExpRest {
 
 /// Takes single token and returns a LizpExp.Number if it's 
 /// able to be parsed as f64, else returns a LizpExp.Symbol
-pub fn parseAtom(atom: []const u8) LizpExp {
+fn parseAtom(atom: []const u8) LizpExp {
     var float_val: f64 = std.fmt.parseFloat(f64, atom) catch return LizpExp{ .Symbol = atom };
     return LizpExp{ .Number = float_val };
 }
 
 /// Parses everything up to next the ")" and then returns a LizpExp.List
 /// with the parsed list, and then the rest of the tokens after the ")".
-pub fn parseRest(tokens: [][]const u8) LizpErr!LizpExpRest {
+fn parseRest(tokens: [][]const u8) LizpErr!LizpExpRest {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var res = std.ArrayList(LizpExp).init(&gpa.allocator);
     var rest: [][]const u8 = tokens;
@@ -42,7 +47,7 @@ pub fn parseRest(tokens: [][]const u8) LizpErr!LizpExpRest {
             rest = rest[1..rest.len]; // Skip over the ) and return the rest of the tokens
             return LizpExpRest{ .exp = LizpExp{ .List = res.items }, .rest = rest };
         }
-        var intermediate: LizpExpRest = try parse(rest);
+        var intermediate: LizpExpRest = try parseTokens(rest);
         res.append(intermediate.exp) catch unreachable;
         rest = intermediate.rest;
     }
@@ -55,11 +60,22 @@ test "parseAtom" {
     try expect(parseAtom("my-atom") == LizpExp.Symbol);
 }
 
-test "parse happy-path" {
+test "parse" {
     const tokenize = @import("tokenize.zig");
     var token_string = "(+ 1 2)";
     var tokens = try tokenize.tokenize(token_string);
-    var parse_result = try parse(tokens);
+    var lizp_expression = try parse(tokens);
+    try expect(lizp_expression == LizpExp.List);
+    try expect(lizp_expression.List[0] == LizpExp.Symbol);
+    try expect(lizp_expression.List[1] == LizpExp.Number);
+    try expect(lizp_expression.List[1].Number == 1);
+}
+
+test "parseTokens happy-path" {
+    const tokenize = @import("tokenize.zig");
+    var token_string = "(+ 1 2)";
+    var tokens = try tokenize.tokenize(token_string);
+    var parse_result = try parseTokens(tokens);
     var lizp_expression = parse_result.exp;
     try expect(lizp_expression == LizpExp.List);
     try expect(lizp_expression.List[0] == LizpExp.Symbol);
@@ -67,18 +83,18 @@ test "parse happy-path" {
     try expect(lizp_expression.List[1].Number == 1);
 }
 
-test "parse bad-expression" {
+test "parseTokens bad-expression" {
     const tokenize = @import("tokenize.zig");
     var token_string = ") bad-exp (";
     var tokens = try tokenize.tokenize(token_string);
-    try expectError(LizpErr.UnexpectedClosingParen, parse(tokens));
+    try expectError(LizpErr.UnexpectedClosingParen, parseTokens(tokens));
 }
 
-test "parse no closing" {
+test "parseTokens no closing" {
     const tokenize = @import("tokenize.zig");
     var token_string = "(+ 1 2";
     var tokens = try tokenize.tokenize(token_string);
-    try expectError(LizpErr.NoClosingParen, parse(tokens));
+    try expectError(LizpErr.NoClosingParen, parseTokens(tokens));
 }
 
 test "parseRest" {

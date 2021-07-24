@@ -62,9 +62,6 @@ test "eval" {
     const slice = array[0..3];
     var exp = LizpExp{ .List = slice };
     const result = try eval(exp, env);
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var s = result.to_string(&gpa.allocator);
-    std.log.warn("Eval'd exp: '{s}'", .{s});
     try expect(result == LizpExp.Number);
     try expect(result.Number == 9);
 }
@@ -73,7 +70,7 @@ test "tokenize-parse-eval" {
     const input = "(+ 1 7 (- 13 4))";
     const expression = try parse(try tokenize(input));
     const env = try lizp.defaultEnv();
-    const out = try eval(expression.exp, env);
+    const out = try eval(expression, env);
     try expect(out.Number == 17);
 }
 
@@ -88,7 +85,7 @@ pub fn main() anyerror!void {
         var in = (try nextLine(stdin.reader(), &buffer));
         if (std.mem.eql(u8, in, "")) break;
         const expression = try parse(try tokenize(in));
-        var res = try eval(expression.exp, env);
+        var res = try eval(expression, env);
         try stdout.writer().print("{s}\n", .{try res.to_string(&gpa.allocator)});
     }
 }
