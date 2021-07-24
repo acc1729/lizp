@@ -44,6 +44,18 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
     };
 }
 
+fn nextLine(reader: anytype, buffer: []u8) ![]const u8 {
+    var line: []const u8 = (try reader.readUntilDelimiterOrEof(
+        buffer,
+        '\n',
+    )) orelse return "";
+    // trim annoying windows-only carriage return character
+    if (std.builtin.os.tag == .windows) {
+        line = std.mem.trimRight(u8, line, "\r");
+    }
+    return line;
+}
+
 test "eval" {
     const env: LizpEnv = try lizp.defaultEnv();
     const array: [3]LizpExp = .{ LizpExp{ .Symbol = "+" }, LizpExp{ .Number = 4 }, LizpExp{ .Number = 5 } };
@@ -66,5 +78,17 @@ test "tokenize-parse-eval" {
 }
 
 pub fn main() anyerror!void {
-    std.log.warn("All your '{d:4.}' are belong to us!", .{1.2345});
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const stdout = std.io.getStdOut();
+    const stdin = std.io.getStdIn();
+    const env = try lizp.defaultEnv();
+    var buffer: [100]u8 = undefined;
+    while (true) {
+        try stdout.writeAll("Lizp > ");
+        var in = (try nextLine(stdin.reader(), &buffer));
+        if (std.mem.eql(u8, in, "")) break;
+        const expression = try parse(try tokenize(in));
+        var res = try eval(expression.exp, env);
+        try stdout.writer().print("{s}\n", .{try res.to_string(&gpa.allocator)});
+    }
 }

@@ -11,7 +11,6 @@ const LizpExpRest = lizp.LizpExpRest;
 /// LizpExp, sealed in a LizpExpRest to help with recursion.
 pub fn parse(tokens: [][]const u8) LizpErr!LizpExpRest {
     var token = tokens[0];
-    std.log.info("First: {s}", .{token});
     if (std.mem.eql(u8, token, "(")) {
         return parseRest(tokens[1..tokens.len]);
     } else if (std.mem.eql(u8, token, ")")) {
