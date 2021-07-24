@@ -28,6 +28,8 @@ fn parseTokens(tokens: [][]const u8) LizpErr!LizpExpRest {
 /// Takes single token and returns a LizpExp.Number if it's 
 /// able to be parsed as f64, else returns a LizpExp.Symbol
 fn parseAtom(atom: []const u8) LizpExp {
+    if (std.mem.eql(u8, atom, "true")) return LizpExp{ .Bool = true };
+    if (std.mem.eql(u8, atom, "false")) return LizpExp{ .Bool = false };
     var float_val: f64 = std.fmt.parseFloat(f64, atom) catch return LizpExp{ .Symbol = atom };
     return LizpExp{ .Number = float_val };
 }
@@ -57,7 +59,12 @@ test "parseAtom" {
     var float_atom = parseAtom("1.234");
     try expect(float_atom == LizpExp.Number);
     try expect(float_atom.Number == 1.234);
+
     try expect(parseAtom("my-atom") == LizpExp.Symbol);
+
+    var bool_atom = parseAtom("true");
+    try expect(bool_atom == LizpExp.Bool);
+    try expect(bool_atom.Bool == true);
 }
 
 test "parse" {

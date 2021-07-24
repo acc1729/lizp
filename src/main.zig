@@ -11,6 +11,9 @@ const LizpExpRest = lizp.LizpExpRest;
 
 pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
     return switch (exp) {
+        .Bool => {
+            return exp;
+        },
         .Symbol => {
             return env.data.get(exp.Symbol) orelse return LizpErr.SymbolNotFound;
         },

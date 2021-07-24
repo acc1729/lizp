@@ -2,6 +2,7 @@ const std = @import("std");
 const expect = std.testing.expect;
 
 pub const LizpExp = union(enum) {
+    Bool: bool,
     Symbol: []const u8,
     Number: f64,
     List: []const LizpExp,
@@ -10,6 +11,7 @@ pub const LizpExp = union(enum) {
     pub fn to_string(self: LizpExp, allocator: *std.mem.Allocator) anyerror![]const u8 {
         var a = allocator;
         return switch (self) {
+            .Bool => if (self.Bool) "true" else "false",
             .Symbol => self.Symbol,
             .Number => number: {
                 const space = ' ';
@@ -89,6 +91,18 @@ pub fn defaultEnv() !LizpEnv {
     try env.put("+", LizpExp{ .Func = lizpSum });
     try env.put("-", LizpExp{ .Func = lizpSub });
     return LizpEnv{ .data = env };
+}
+
+test "lizpExp.Bool to_string" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+
+    const true_lizp: LizpExp = LizpExp{ .Bool = true };
+    var true_res = try true_lizp.to_string(&gpa.allocator);
+    try expect(std.mem.eql(u8, true_res, "true"));
+
+    const false_lizp: LizpExp = LizpExp{ .Bool = false };
+    var false_res = try false_lizp.to_string(&gpa.allocator);
+    try expect(std.mem.eql(u8, false_res, "false"));
 }
 
 test "lizpExp.Number to_string" {
