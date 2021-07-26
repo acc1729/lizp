@@ -41,8 +41,10 @@ pub const LizpExp = union(enum) {
     }
 };
 
-pub const LizpErr = error{ UnexpectedForm, UnexpectedClosingParen, NoClosingParen, NotANumber, NotAFunc, SymbolNotFound, EmptyList, OutOfMemory };
-
+pub const ArithmeticErr = error{ NotANumber, Incomprable };
+pub const ParseErr = error{ UnexpectedClosingParen, NoClosingParen };
+pub const RunTimeErr = error{ UnexpectedForm, NotAFunc, SymbolNotFound, EmptyList, OutOfMemory };
+pub const LizpErr = ArithmeticErr || ParseErr || RunTimeErr;
 pub const LizpEnv = struct {
     data: std.StringHashMap(LizpExp),
 };
@@ -51,6 +53,51 @@ pub const LizpExpRest = struct {
     exp: LizpExp,
     rest: [][]const u8,
 };
+
+fn ensureComparability(first: LizpExp, other: LizpExp) ArithmeticErr!void {
+    if (!(first == LizpExp.Number)) return ArithmeticErr.NotANumber;
+    if (!(other == LizpExp.Number)) return ArithmeticErr.NotANumber;
+}
+
+fn equal(first: LizpExp, other: LizpExp) ArithmeticErr!bool {
+    ensureComparability(first, other) catch return ArithmeticErr.Incomprable;
+    return first.Number == other.Number;
+}
+
+fn greater(first: LizpExp, other: LizpExp) ArithmeticErr!bool {
+    ensureComparability(first, other) catch return ArithmeticErr.Incomprable;
+    return first.Number > other.Number;
+}
+
+fn greaterThanOrEqual(first: LizpExp, other: LizpExp) ArithmeticErr!bool {
+    ensureComparability(first, other) catch return ArithmeticErr.Incomprable;
+    return first.Number >= other.Number;
+}
+
+fn less(first: LizpExp, other: LizpExp) ArithmeticErr!bool {
+    ensureComparability(first, other) catch return ArithmeticErr.Incomprable;
+    return first.Number < other.Number;
+}
+
+fn lessThanOrEqual(first: LizpExp, other: LizpExp) ArithmeticErr!bool {
+    ensureComparability(first, other) catch return ArithmeticErr.Incomprable;
+    return first.Number <= other.Number;
+}
+
+fn monotonicCompare(comptime compator: fn (LizpExp, LizpExp) ArithmeticErr!bool) (fn (list: []const LizpExp) ArithmeticErr!*LizpExp) {
+    return struct {
+        fn _monotonicCompare(list: []const LizpExp) ArithmeticErr!*LizpExp {
+            var monotonic: bool = true;
+            var i: usize = 0;
+            // Access to second-to-last member of slice
+            while (i <= list.len - 2) : (i += 1) {
+                monotonic = try compator(list[i], list[i + 1]);
+                if (!monotonic) break;
+            }
+            return &LizpExp{ .Bool = monotonic };
+        }
+    }._monotonicCompare;
+}
 
 fn lizpSum(list: []const LizpExp) LizpErr!*LizpExp {
     var sum: f64 = 0;
@@ -90,6 +137,11 @@ pub fn defaultEnv() !LizpEnv {
     var env = std.StringHashMap(LizpExp).init(&gpa.allocator);
     try env.put("+", LizpExp{ .Func = lizpSum });
     try env.put("-", LizpExp{ .Func = lizpSub });
+    try env.put("==", LizpExp{ .Func = monotonicCompare(equal) });
+    try env.put(">", LizpExp{ .Func = monotonicCompare(greater) });
+    try env.put(">=", LizpExp{ .Func = monotonicCompare(greaterThanOrEqual) });
+    try env.put("<", LizpExp{ .Func = monotonicCompare(less) });
+    try env.put("<=", LizpExp{ .Func = monotonicCompare(lessThanOrEqual) });
     return LizpEnv{ .data = env };
 }
 
@@ -169,6 +221,30 @@ test "lizpSum" {
     const result: *LizpExp = try lizpSum(slice);
     try expect(result.* == LizpExp.Number);
     try expect(result.*.Number == 12);
+}
+
+test "equal" {
+    const will_be_equal: bool = try equal(LizpExp{ .Number = 3 }, LizpExp{ .Number = 3 });
+    try expect(will_be_equal);
+    const will_not_be_equal: bool = try equal(LizpExp{ .Number = 5 }, LizpExp{ .Number = 3 });
+    try expect(!will_not_be_equal);
+}
+
+test "monotonicEqual" {
+    const monotonicEqual = monotonicCompare(equal);
+    const exp_arr: [3]LizpExp = .{ LizpExp{ .Number = 3 }, LizpExp{ .Number = 3 }, LizpExp{ .Number = 3 } };
+    const exp_slice = exp_arr[0..3];
+    const will_be_equal: *LizpExp = try monotonicEqual(exp_slice);
+    try expect(will_be_equal.*.Bool);
+
+    const exp_arr2: [3]LizpExp = .{ LizpExp{ .Number = 3 }, LizpExp{ .Number = 5 }, LizpExp{ .Number = 3 } };
+    const exp_slice2 = exp_arr2[0..3];
+    const will_not_be_equal: *LizpExp = try monotonicEqual(exp_slice2);
+    try expect(!will_not_be_equal.*.Bool);
+
+    const exp_arr3: [3]LizpExp = .{ LizpExp{ .Number = 3 }, LizpExp{ .Symbol = "some-symbol" }, LizpExp{ .Number = 3 } };
+    const exp_slice3 = exp_arr3[0..3];
+    try std.testing.expectError(ArithmeticErr.Incomprable, monotonicEqual(exp_slice3));
 }
 
 test "defaultEnv" {

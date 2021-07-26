@@ -88,7 +88,10 @@ pub fn main() anyerror!void {
         var in = (try nextLine(stdin.reader(), &buffer));
         if (std.mem.eql(u8, in, "")) break;
         const expression = try parse(try tokenize(in));
-        var res = try eval(expression, env);
+        var res = eval(expression, env) catch |err| {
+            try stdout.writer().print("There was an error in the above expression: {s}\n", .{@errorName(err)});
+            continue;
+        };
         try stdout.writer().print("{s}\n", .{try res.to_string(&gpa.allocator)});
     }
 }
