@@ -50,3 +50,14 @@ test "evalIfForm false" {
     const out = try evalIfForm(expression.List, env);
     try expect(out.Number == 34);
 }
+
+test "evalDefForm" {
+    const parse = @import("parse.zig").parse;
+    const tokenize = @import("tokenize.zig").tokenize;
+    const input = "(my-key 51)";
+    const expression = try parse(try tokenize(input));
+    const env = try lizp.defaultEnv();
+    _ = try evalDefForm(expression.List, env);
+    const gotten_expression = env.data.get("my-key") orelse unreachable;
+    try expect(gotten_expression.Number == 51);
+}
