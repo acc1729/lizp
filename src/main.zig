@@ -32,7 +32,7 @@ pub fn repl() anyerror!void {
         var in = (try nextLine(stdin.reader(), &buffer));
         if (std.mem.eql(u8, in, "")) break;
         const expression = try parse(try tokenize(in));
-        var res = eval(expression, env) catch |err| {
+        var res = lizp.eval(expression, env) catch |err| {
             try stdout.writer().print("There was an error in the above expression: {s}\n", .{@errorName(err)});
             continue;
         };
@@ -41,5 +41,5 @@ pub fn repl() anyerror!void {
 }
 
 pub fn main() anyerror!void {
-    repl();
+    try repl();
 }

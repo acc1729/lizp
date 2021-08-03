@@ -3,6 +3,7 @@ const expect = std.testing.expect;
 
 const parse = @import("parse.zig").parse;
 const tokenize = @import("tokenize.zig").tokenize;
+const builtins = @import("builtins.zig");
 
 pub const LizpExp = union(enum) {
     Bool: bool,
@@ -46,7 +47,7 @@ pub const LizpExp = union(enum) {
 
 pub const ArithmeticErr = error{ NotANumber, Incomprable };
 pub const ParseErr = error{ UnexpectedClosingParen, NoClosingParen };
-pub const RunTimeErr = error{ UnexpectedForm, NotAFunc, SymbolNotFound, EmptyList, OutOfMemory };
+pub const RunTimeErr = error{ UnexpectedForm, NotAFunc, NotASymbol, SymbolNotFound, EmptyList, OutOfMemory, NotEnoughArguments };
 pub const LizpErr = ArithmeticErr || ParseErr || RunTimeErr;
 pub const LizpEnv = struct {
     data: std.StringHashMap(LizpExp),
@@ -148,6 +149,18 @@ pub fn defaultEnv() !LizpEnv {
     return LizpEnv{ .data = env };
 }
 
+/// If the first form is a symbol, do a hard-coded lookup into our builtin arg_forms
+/// If it's not a symbol, or it's not in our hard-coded lookup, return null
+pub fn evalBuiltinForm(exp: LizpExp, args: []const LizpExp, env: LizpEnv) LizpErr!?LizpExp {
+    if (exp != LizpExp.Symbol) return null;
+    if (std.mem.eql(u8, exp.Symbol, "if")) {
+        return try builtins.evalIfForm(args, env);
+    } else if (std.mem.eql(u8, exp.Symbol, "def")) {
+        return try builtins.evalDefForm(args, env);
+    }
+    return null;
+}
+
 pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
     return switch (exp) {
         .Bool => {
@@ -162,23 +175,29 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
         .List => {
             if (exp.List.len == 0) return LizpErr.EmptyList;
             var first_form = exp.List[0];
-            var first_eval = try eval(first_form, env);
             const arg_forms = exp.List[1..];
-            switch (first_eval) {
-                .Func => {
-                    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-                    var evaled_args = std.ArrayList(LizpExp).init(&gpa.allocator);
-                    for (arg_forms) |arg| {
-                        var evaluated_form = try eval(arg, env);
-                        evaled_args.append(evaluated_form) catch return LizpErr.OutOfMemory;
-                    }
-                    var res = try first_eval.Func(evaled_args.items);
-                    return res.*;
-                },
-                else => {
-                    return LizpErr.NotAFunc;
-                },
-            }
+
+            // Check to see if there's a builtin, and whether or not it evals well.
+            // If it does, return it right away.
+            var builtin_result: LizpExp = (try evalBuiltinForm(first_form, arg_forms, env)) orelse {
+                var first_eval = try eval(first_form, env);
+                switch (first_eval) {
+                    .Func => {
+                        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+                        var evaled_args = std.ArrayList(LizpExp).init(&gpa.allocator);
+                        for (arg_forms) |arg| {
+                            var evaluated_form = try eval(arg, env);
+                            evaled_args.append(evaluated_form) catch return LizpErr.OutOfMemory;
+                        }
+                        var res = try first_eval.Func(evaled_args.items);
+                        return res.*;
+                    },
+                    else => {
+                        return LizpErr.NotAFunc;
+                    },
+                }
+            };
+            return builtin_result;
         },
         .Func => {
             return LizpErr.UnexpectedForm;
