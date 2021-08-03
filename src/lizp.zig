@@ -1,6 +1,9 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
+const parse = @import("parse.zig").parse;
+const tokenize = @import("tokenize.zig").tokenize;
+
 pub const LizpExp = union(enum) {
     Bool: bool,
     Symbol: []const u8,
@@ -145,6 +148,44 @@ pub fn defaultEnv() !LizpEnv {
     return LizpEnv{ .data = env };
 }
 
+pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
+    return switch (exp) {
+        .Bool => {
+            return exp;
+        },
+        .Symbol => {
+            return env.data.get(exp.Symbol) orelse return LizpErr.SymbolNotFound;
+        },
+        .Number => {
+            return exp;
+        },
+        .List => {
+            if (exp.List.len == 0) return LizpErr.EmptyList;
+            var first_form = exp.List[0];
+            var first_eval = try eval(first_form, env);
+            const arg_forms = exp.List[1..];
+            switch (first_eval) {
+                .Func => {
+                    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+                    var evaled_args = std.ArrayList(LizpExp).init(&gpa.allocator);
+                    for (arg_forms) |arg| {
+                        var evaluated_form = try eval(arg, env);
+                        evaled_args.append(evaluated_form) catch return LizpErr.OutOfMemory;
+                    }
+                    var res = try first_eval.Func(evaled_args.items);
+                    return res.*;
+                },
+                else => {
+                    return LizpErr.NotAFunc;
+                },
+            }
+        },
+        .Func => {
+            return LizpErr.UnexpectedForm;
+        },
+    };
+}
+
 test "lizpExp.Bool to_string" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
@@ -251,4 +292,22 @@ test "defaultEnv" {
     var env = try defaultEnv();
     var plus = env.data.get("+") orelse unreachable;
     try expect(plus == LizpExp.Func);
+}
+
+test "eval" {
+    const env: LizpEnv = try defaultEnv();
+    const array: [3]LizpExp = .{ LizpExp{ .Symbol = "+" }, LizpExp{ .Number = 4 }, LizpExp{ .Number = 5 } };
+    const slice = array[0..3];
+    var exp = LizpExp{ .List = slice };
+    const result = try eval(exp, env);
+    try expect(result == LizpExp.Number);
+    try expect(result.Number == 9);
+}
+
+test "tokenize-parse-eval" {
+    const input = "(+ 1 7 (- 13 4))";
+    const expression = try parse(try tokenize(input));
+    const env = try defaultEnv();
+    const out = try eval(expression, env);
+    try expect(out.Number == 17);
 }
