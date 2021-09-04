@@ -31,19 +31,21 @@ pub fn evalDefForm(arg_forms: []const LizpExp, env: LizpEnv) LizpErr!LizpExp {
     return key_form;
 }
 
-pub fn evalFnForm(arg_forms: []const LizpExp) LizpErr!LizpExp {
-    var mut_arg_forms = arg_forms;
+pub fn evalFnForm(arg_forms: []const LizpExp, alloc: *std.mem.Allocator) LizpErr!LizpExp {
     if (arg_forms.len <= 1) return LizpErr.NotEnoughArguments;
     if (arg_forms.len >= 3) return LizpErr.UnexpectedForm;
     if (arg_forms[0] != LizpExp.List) return LizpErr.NotAList;
-    const lambda = LizpExp{ .Lambda = &lizp.LizpLambda{
-        .params_exp = &mut_arg_forms[0],
-        .body_exp = &mut_arg_forms[1],
-    } };
-    // Here, .params_exp and .body_exp are of tag LizpExp.List;
-    // Though once we return, we lose the reference to them?
-    // Stack pointer decrements, blows up our reference.
-    return lambda;
+
+    var params = try alloc.create(LizpExp);
+    var body = try alloc.create(LizpExp);
+    var inner_lambda = try alloc.create(lizp.LizpLambda);
+    params.* = arg_forms[0];
+    body.* = arg_forms[1];
+    inner_lambda.* = lizp.LizpLambda{
+        .params_exp = params,
+        .body_exp = body,
+    };
+    return LizpExp{ .Lambda = inner_lambda };
 }
 
 test "evalIfForm true" {

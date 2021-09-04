@@ -13,10 +13,6 @@ pub const LizpExp = union(enum) {
     Func: fn ([]const LizpExp) LizpErr!*LizpExp,
     Lambda: *LizpLambda,
 
-    pub fn dbg_tag(self: LizpExp) void {
-        std.debug.print("Tag: {s} -- \n", .{@tagName(self)});
-    }
-
     pub fn to_string(self: LizpExp, allocator: *std.mem.Allocator) anyerror![]const u8 {
         var a = allocator;
         return switch (self) {
@@ -163,15 +159,14 @@ pub fn defaultEnv() !LizpEnv {
 
 /// If the first form is a symbol, do a hard-coded lookup into our builtin arg_forms
 /// If it's not a symbol, or it's not in our hard-coded lookup, return null
-pub fn evalBuiltinForm(exp: LizpExp, args: []const LizpExp, env: LizpEnv) LizpErr!?LizpExp {
+pub fn evalBuiltinForm(exp: LizpExp, args: []const LizpExp, env: LizpEnv, alloc: *std.mem.Allocator) LizpErr!?LizpExp {
     if (exp != LizpExp.Symbol) return null;
     if (std.mem.eql(u8, exp.Symbol, "if")) {
         return try builtins.evalIfForm(args, env);
     } else if (std.mem.eql(u8, exp.Symbol, "def")) {
         return try builtins.evalDefForm(args, env);
     } else if (std.mem.eql(u8, exp.Symbol, "fn")) {
-        const fn_form = try builtins.evalFnForm(args);
-        fn_form.Lambda.*.body_exp.*.dbg_tag();
+        const fn_form = try builtins.evalFnForm(args, alloc);
         return fn_form;
     }
     return null;
@@ -238,18 +233,17 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
             return exp;
         },
         .List => {
+            var gpa = std.heap.GeneralPurposeAllocator(.{}){};
             if (exp.List.len == 0) return LizpErr.EmptyList;
             var first_form = exp.List[0];
-            first_form.dbg_tag();
             const arg_forms = exp.List[1..];
 
             // Check to see if there's a builtin, and whether or not it evals well.
             // If it does, return it right away.
-            var builtin_result: LizpExp = (try evalBuiltinForm(first_form, arg_forms, env)) orelse {
+            var builtin_result: LizpExp = (try evalBuiltinForm(first_form, arg_forms, env, &gpa.allocator)) orelse {
                 var first_eval = try eval(first_form, env);
                 switch (first_eval) {
                     .Func => {
-                        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
                         const evaled_args = try evalForms(arg_forms, env, &gpa.allocator);
                         var res = try first_eval.Func(evaled_args);
                         return res.*;
