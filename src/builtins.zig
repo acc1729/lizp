@@ -31,6 +31,21 @@ pub fn evalDefForm(arg_forms: []const LizpExp, env: LizpEnv) LizpErr!LizpExp {
     return key_form;
 }
 
+pub fn evalFnForm(arg_forms: []const LizpExp) LizpErr!LizpExp {
+    var mut_arg_forms = arg_forms;
+    if (arg_forms.len <= 1) return LizpErr.NotEnoughArguments;
+    if (arg_forms.len >= 3) return LizpErr.UnexpectedForm;
+    if (arg_forms[0] != LizpExp.List) return LizpErr.NotAList;
+    const lambda = LizpExp{ .Lambda = &lizp.LizpLambda{
+        .params_exp = &mut_arg_forms[0],
+        .body_exp = &mut_arg_forms[1],
+    } };
+    // Here, .params_exp and .body_exp are of tag LizpExp.List;
+    // Though once we return, we lose the reference to them?
+    // Stack pointer decrements, blows up our reference.
+    return lambda;
+}
+
 test "evalIfForm true" {
     const parse = @import("parse.zig").parse;
     const tokenize = @import("tokenize.zig").tokenize;

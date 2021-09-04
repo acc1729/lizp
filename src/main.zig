@@ -1,6 +1,8 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
+const builtin = @import("builtin");
+
 const lizp = @import("lizp.zig");
 const parse = @import("parse.zig").parse;
 const tokenize = @import("tokenize.zig").tokenize;
@@ -41,5 +43,6 @@ pub fn repl() anyerror!void {
 }
 
 pub fn main() anyerror!void {
+    std.debug.print("Size of LizpExp: {} B\n", .{@sizeOf(LizpExp)});
     try repl();
 }
