@@ -78,3 +78,16 @@ test "evalDefForm" {
     const gotten_expression = env.data.get("my-key") orelse unreachable;
     try expect(gotten_expression.Number == 51);
 }
+
+test "evalFnForm" {
+    const parse = @import("parse.zig").parse;
+    const tokenize = @import("tokenize.zig").tokenize;
+    var ta = std.testing.allocator;
+    const input = "((a) (+ a a 5))";
+    const expression = try parse(try tokenize(input));
+    const out = try evalFnForm(expression.List, ta);
+    defer ta.destroy(out.Lambda);
+    defer ta.destroy(out.Lambda.*.body_exp);
+    defer ta.destroy(out.Lambda.*.params_exp);
+    try expect(out == .Lambda);
+}

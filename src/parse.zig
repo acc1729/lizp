@@ -7,6 +7,7 @@ const LizpErr = lizp.LizpErr;
 const LizpExp = lizp.LizpExp;
 const LizpExpRest = lizp.LizpExpRest;
 
+/// Parses an array of tokens into a LizpExp
 pub fn parse(input: [][]const u8) LizpErr!LizpExp {
     const expression = try parseTokens(input);
     return expression.exp;
@@ -25,8 +26,10 @@ fn parseTokens(tokens: [][]const u8) LizpErr!LizpExpRest {
     }
 }
 
-/// Takes single token and returns a LizpExp.Number if it's 
-/// able to be parsed as f64, else returns a LizpExp.Symbol
+/// Takes a single token and returns, in order of precedence:
+/// 1. A boolean, if possible,
+/// 2. A number, if possible,
+/// 3. A symbol.
 fn parseAtom(atom: []const u8) LizpExp {
     if (std.mem.eql(u8, atom, "true")) return LizpExp{ .Bool = true };
     if (std.mem.eql(u8, atom, "false")) return LizpExp{ .Bool = false };

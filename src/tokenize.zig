@@ -1,6 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 
+/// Pre-processes the input, putting a space between each ( and )
 fn tokenizePrepass(str: []const u8) []u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var neededSize1: usize = std.mem.replacementSize(u8, str, "(", " ( ");
@@ -12,6 +13,7 @@ fn tokenizePrepass(str: []const u8) []u8 {
     return buff2;
 }
 
+/// Returns an array of tokens from a string input. 
 pub fn tokenize(str: []const u8) ![][]const u8 {
     var prepass = tokenizePrepass(str);
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

@@ -273,37 +273,39 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
 }
 
 test "lizpExp.Bool to_string" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var ta = std.testing.allocator;
 
     const true_lizp: LizpExp = LizpExp{ .Bool = true };
-    var true_res = try true_lizp.to_string(&gpa.allocator);
+    var true_res = try true_lizp.to_string(ta);
     try expect(std.mem.eql(u8, true_res, "true"));
 
     const false_lizp: LizpExp = LizpExp{ .Bool = false };
-    var false_res = try false_lizp.to_string(&gpa.allocator);
+    var false_res = try false_lizp.to_string(ta);
     try expect(std.mem.eql(u8, false_res, "false"));
 }
 
 test "lizpExp.Number to_string" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var ta = std.testing.allocator;
     const num: LizpExp = LizpExp{ .Number = 1.234 };
-    var res = try num.to_string(&gpa.allocator);
+    var res = try num.to_string(ta);
+    defer ta.free(res);
     try expect(std.mem.eql(u8, res, "1.234"));
 
     const num2: LizpExp = LizpExp{ .Number = 1.2345678901234 };
-    var res2 = try num2.to_string(&gpa.allocator);
+    var res2 = try num2.to_string(ta);
+    defer ta.free(res2);
     try expect(std.mem.eql(u8, res2, "1.2345678901234"));
 }
 
 test "lizpExp.Symbol to_string" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var ta = std.testing.allocator;
     const num: LizpExp = LizpExp{ .Symbol = "my-symbol" };
-    var res = try num.to_string(&gpa.allocator);
+    var res = try num.to_string(ta);
     try expect(std.mem.eql(u8, res, "my-symbol"));
 }
 
 test "lizpExp.List to_string" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var ta = std.testing.allocator;
     const array_of_lizpexp: [3]LizpExp = .{
         LizpExp{
             .Symbol = "some-symbol",
@@ -317,7 +319,8 @@ test "lizpExp.List to_string" {
     };
     var slice_of_lizpexp = array_of_lizpexp[0..array_of_lizpexp.len];
     const exp = LizpExp{ .List = slice_of_lizpexp };
-    var res = try exp.to_string(&gpa.allocator);
+    var res = try exp.to_string(ta);
+    defer ta.free(res);
     try expect(std.mem.eql(u8, res, "( some-symbol 1 2 )"));
     var another_array: [3]LizpExp = .{
         LizpExp{
@@ -330,7 +333,8 @@ test "lizpExp.List to_string" {
     };
     var another_slice = another_array[0..another_array.len];
     var another_exp = LizpExp{ .List = another_slice };
-    var another_res = try another_exp.to_string(&gpa.allocator);
+    var another_res = try another_exp.to_string(ta);
+    defer ta.free(another_res);
     try expect(std.mem.eql(u8, another_res, "( left ( some-symbol 1 2 ) right )"));
 }
 
@@ -396,4 +400,12 @@ test "tokenize-parse-eval" {
     const env = try defaultEnv();
     const out = try eval(expression, env);
     try expect(out.Number == 17);
+}
+
+test "lambda call" {
+    const input = "((fn (a b) (+ a b)) 12 8)";
+    const expression = try parse(try tokenize(input));
+    const env = try defaultEnv();
+    const out = try eval(expression, env);
+    try expect(out.Number == 20);
 }
