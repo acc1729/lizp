@@ -409,3 +409,23 @@ test "lambda call" {
     const out = try eval(expression, env);
     try expect(out.Number == 20);
 }
+
+// The coup-de-grace: Define a lambda and assign it to a symbol,
+// and then in a later expression, invoke the lambda.
+test "lambda call" {
+    const env = try defaultEnv();
+
+    const function_def = "(def my-func (fn (a b) (+ a b)))";
+    const function_def_exp = try parse(try tokenize(function_def));
+    const function_def_out = try eval(function_def_exp, env);
+    try expect(function_def_out == .Symbol);
+
+    const lambda_expression = env.data.get("my-func") orelse unreachable;
+    try expect(lambda_expression == .Lambda);
+
+    const function_application = "(my-func 12 8)";
+    const function_application_exp = try parse(try tokenize(function_application));
+    const function_application_out = try eval(function_application_exp, env);
+    try expect(function_application_out == .Number);
+    try expect(function_application_out.Number == 20);
+}
