@@ -190,15 +190,12 @@ pub fn envGet(key: []const u8, env: LizpEnv) ?LizpExp {
     };
 }
 
-pub fn newEnvForLambda(params: LizpExp, args: []const LizpExp, env: LizpEnv) LizpErr!LizpEnv {
-    var keys_gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = keys_gpa.deinit();
-    const keys = try parseStringsFromSymbols(params, &keys_gpa.allocator);
-    defer keys_gpa.allocator.free(keys);
+pub fn newEnvForLambda(params: LizpExp, args: []const LizpExp, env: LizpEnv, allocator: *std.mem.Allocator) LizpErr!LizpEnv {
+    const keys = try parseStringsFromSymbols(params, allocator);
+    defer allocator.free(keys);
     if (keys.len != args.len) return LizpErr.NotEnoughArguments;
-    const vals = try evalForms(args, env, &keys_gpa.allocator);
-    var env_gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var data = std.StringHashMap(LizpExp).init(&env_gpa.allocator);
+    const vals = try evalForms(args, env, allocator);
+    var data = std.StringHashMap(LizpExp).init(allocator);
     var i = @as(usize, 0);
     // keys and vals have already been checked to be the same length,
     // so this is always legal
@@ -253,7 +250,8 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
                         const lambda = first_eval.Lambda.*;
                         const params = lambda.params_exp;
                         const body = lambda.body_exp;
-                        const new_env = try newEnvForLambda(params.*, arg_forms, env);
+                        var new_env = try newEnvForLambda(params.*, arg_forms, env, &gpa.allocator);
+                        defer new_env.data.deinit();
                         var res = try eval(body.*, new_env);
                         return res;
                     },
