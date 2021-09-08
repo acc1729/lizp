@@ -194,6 +194,7 @@ pub fn newEnvForLambda(params: LizpExp, args: []const LizpExp, env: LizpEnv) Liz
     var keys_gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = keys_gpa.deinit();
     const keys = try parseStringsFromSymbols(params, &keys_gpa.allocator);
+    defer keys_gpa.allocator.free(keys);
     if (keys.len != args.len) return LizpErr.NotEnoughArguments;
     const vals = try evalForms(args, env, &keys_gpa.allocator);
     var env_gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -411,6 +412,15 @@ test "tokenize-parse-eval" {
     const env = try defaultEnv();
     const out = try eval(expression, env);
     try expect(out.Number == 17);
+}
+
+test "parseStringsFromSymbols" {
+    const ta = std.testing.allocator;
+    const symbols = "(symbol-0 symbol-1 symbol-2)";
+    const expression = try parse(try tokenize(symbols));
+    const symbol_slice = try parseStringsFromSymbols(expression, ta);
+    defer ta.free(symbol_slice);
+    try expect(std.mem.eql(u8, symbol_slice[1], "symbol-1"));
 }
 
 test "lambda call" {
