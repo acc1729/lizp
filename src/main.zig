@@ -38,11 +38,12 @@ pub fn repl() anyerror!void {
             try stdout.writer().print("There was an error in the above expression: {s}\n", .{@errorName(err)});
             continue;
         };
-        try stdout.writer().print("{s}\n", .{try res.to_string(&gpa.allocator)});
+        var output = try res.to_string(&gpa.allocator);
+        try stdout.writer().print("{s}\n", .{output});
+        &gpa.allocator.free(output);
     }
 }
 
 pub fn main() anyerror!void {
-    std.debug.print("Size of LizpExp: {} B\n", .{@sizeOf(LizpExp)});
     try repl();
 }

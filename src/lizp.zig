@@ -14,13 +14,12 @@ pub const LizpExp = union(enum) {
     Lambda: *LizpLambda,
 
     pub fn to_string(self: LizpExp, allocator: *std.mem.Allocator) anyerror![]const u8 {
-        var a = allocator;
         return switch (self) {
-            .Bool => if (self.Bool) "true" else "false",
-            .Symbol => self.Symbol,
+            .Bool => if (self.Bool) allocator.dupe(u8, "true") else allocator.dupe(u8, "false"),
+            .Symbol => allocator.dupe(u8, self.Symbol),
             .Number => number: {
                 const space = ' ';
-                var num = try std.fmt.allocPrint(a, "{d}", .{self.Number});
+                var num = try std.fmt.allocPrint(allocator, "{d}", .{self.Number});
                 var i: usize = 0;
                 for (num) |char, index| {
                     if (char != space) {
@@ -31,18 +30,19 @@ pub const LizpExp = union(enum) {
                 break :number num[i..num.len];
             },
             .List => list: {
-                var string = std.ArrayList(u8).init(a);
+                var string = std.ArrayList(u8).init(allocator);
                 try string.appendSlice("( ");
                 for (self.List) |exp| {
-                    var intermediate = try exp.to_string(a);
+                    var intermediate = try exp.to_string(allocator);
                     try string.appendSlice(intermediate);
                     try string.append(' ');
+                    allocator.free(intermediate);
                 }
                 try string.append(')');
                 break :list string.items;
             },
-            .Func => try std.fmt.allocPrint(a, "Function", .{}), // TODO what to represent a function as?
-            .Lambda => try std.fmt.allocPrint(a, "Lambda", .{}), // TODO what to represent a lambda as?
+            .Func => try allocator.dupe(u8, "Function"), // TODO what to represent a function as?
+            .Lambda => try allocator.dupe(u8, "Lambda"), // TODO what to represent a lambda as?
         };
     }
 };
@@ -277,10 +277,12 @@ test "lizpExp.Bool to_string" {
 
     const true_lizp: LizpExp = LizpExp{ .Bool = true };
     var true_res = try true_lizp.to_string(ta);
+    defer ta.free(true_res);
     try expect(std.mem.eql(u8, true_res, "true"));
 
     const false_lizp: LizpExp = LizpExp{ .Bool = false };
     var false_res = try false_lizp.to_string(ta);
+    defer ta.free(false_res);
     try expect(std.mem.eql(u8, false_res, "false"));
 }
 
@@ -301,7 +303,16 @@ test "lizpExp.Symbol to_string" {
     var ta = std.testing.allocator;
     const num: LizpExp = LizpExp{ .Symbol = "my-symbol" };
     var res = try num.to_string(ta);
+    defer ta.free(res);
     try expect(std.mem.eql(u8, res, "my-symbol"));
+}
+
+test "lizpExp.Func to_string" {
+    var ta = std.testing.allocator;
+    const func: LizpExp = LizpExp{ .Func = lizpSum };
+    var res = try func.to_string(ta);
+    defer ta.free(res);
+    try expect(std.mem.eql(u8, res, "Function"));
 }
 
 test "lizpExp.List to_string" {
