@@ -59,6 +59,26 @@ pub const LizpErr = ArithmeticErr || ParseErr || RunTimeErr;
 pub const LizpEnv = struct {
     data: std.StringHashMap(LizpExp),
     outer: ?*LizpEnv,
+
+    allocator: *std.mem.Allocator,
+    const Self = @This();
+
+    pub fn init(alloc: *std.mem.Allocator) Self {
+        return .{
+            .data = undefined,
+            .outer = undefined,
+            .allocator = alloc,
+        };
+    }
+
+    pub fn deinit(self: LizpEnv) void {
+        var mut_self = self;
+        var iter = self.data.keyIterator();
+        while (iter.next()) |key| {
+            self.allocator.free(key);
+        }
+        mut_self.data.deinit();
+    }
 };
 
 pub const LizpExpRest = struct {
@@ -146,15 +166,18 @@ fn lizpSub(list: []const LizpExp) LizpErr!*LizpExp {
 
 pub fn defaultEnv() !LizpEnv {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var env = std.StringHashMap(LizpExp).init(&gpa.allocator);
-    try env.put("+", LizpExp{ .Func = lizpSum });
-    try env.put("-", LizpExp{ .Func = lizpSub });
-    try env.put("==", LizpExp{ .Func = monotonicCompare(equal) });
-    try env.put(">", LizpExp{ .Func = monotonicCompare(greater) });
-    try env.put(">=", LizpExp{ .Func = monotonicCompare(greaterThanOrEqual) });
-    try env.put("<", LizpExp{ .Func = monotonicCompare(less) });
-    try env.put("<=", LizpExp{ .Func = monotonicCompare(lessThanOrEqual) });
-    return LizpEnv{ .data = env, .outer = null };
+    var map = std.StringHashMap(LizpExp).init(&gpa.allocator);
+    try map.put("+", LizpExp{ .Func = lizpSum });
+    try map.put("-", LizpExp{ .Func = lizpSub });
+    try map.put("==", LizpExp{ .Func = monotonicCompare(equal) });
+    try map.put(">", LizpExp{ .Func = monotonicCompare(greater) });
+    try map.put(">=", LizpExp{ .Func = monotonicCompare(greaterThanOrEqual) });
+    try map.put("<", LizpExp{ .Func = monotonicCompare(less) });
+    try map.put("<=", LizpExp{ .Func = monotonicCompare(lessThanOrEqual) });
+    var env = LizpEnv.init(&gpa.allocator);
+    env.data = map;
+    env.outer = null;
+    return env;
 }
 
 /// If the first form is a symbol, do a hard-coded lookup into our builtin arg_forms
@@ -192,31 +215,30 @@ pub fn envGet(key: []const u8, env: LizpEnv) ?LizpExp {
 
 pub fn newEnvForLambda(params: LizpExp, args: []const LizpExp, env: LizpEnv, allocator: *std.mem.Allocator) LizpErr!LizpEnv {
     const keys = try parseStringsFromSymbols(params, allocator);
-    defer allocator.free(keys);
-    if (keys.len != args.len) return LizpErr.NotEnoughArguments;
+    if (keys.items.len != args.len) return LizpErr.NotEnoughArguments;
     const vals = try evalForms(args, env, allocator);
     var data = std.StringHashMap(LizpExp).init(allocator);
     var i = @as(usize, 0);
-    // keys and vals have already been checked to be the same length,
-    // so this is always legal
-    while (i < keys.len) : (i += 1) {
-        try data.put(keys[i], vals[i]);
+    // keys and vals have already been checked to
+    // be the same length, so this is always legal
+    while (i < keys.items.len) : (i += 1) {
+        try data.put(keys.items[i], vals[i]);
     }
     var mut_outer = env;
-    return LizpEnv{
-        .data = data,
-        .outer = &mut_outer,
-    };
+    var inner_env = LizpEnv.init(allocator);
+    inner_env.data = data;
+    inner_env.outer = &mut_outer;
+    return inner_env;
 }
 
-pub fn parseStringsFromSymbols(symbols: LizpExp, alloc: *std.mem.Allocator) LizpErr![][]const u8 {
+pub fn parseStringsFromSymbols(symbols: LizpExp, alloc: *std.mem.Allocator) LizpErr!std.ArrayList([]const u8) {
     if (symbols != LizpExp.List) return LizpErr.NotAList;
     var symbol_strings = std.ArrayList([]const u8).init(alloc);
     for (symbols.List) |symbol| {
         if (symbol != LizpExp.Symbol) return LizpErr.NotASymbol;
         try symbol_strings.append(symbol.Symbol);
     }
-    return symbol_strings.items;
+    return symbol_strings;
 }
 
 pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
@@ -251,7 +273,7 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
                         const params = lambda.params_exp;
                         const body = lambda.body_exp;
                         var new_env = try newEnvForLambda(params.*, arg_forms, env, &gpa.allocator);
-                        defer new_env.data.deinit();
+                        defer new_env.deinit();
                         var res = try eval(body.*, new_env);
                         return res;
                     },
@@ -417,8 +439,8 @@ test "parseStringsFromSymbols" {
     const symbols = "(symbol-0 symbol-1 symbol-2)";
     const expression = try parse(try tokenize(symbols));
     const symbol_slice = try parseStringsFromSymbols(expression, ta);
-    defer ta.free(symbol_slice);
-    try expect(std.mem.eql(u8, symbol_slice[1], "symbol-1"));
+    defer symbol_slice.deinit();
+    try expect(std.mem.eql(u8, symbol_slice.items[1], "symbol-1"));
 }
 
 test "lambda call" {
@@ -443,6 +465,29 @@ test "lambda call" {
     try expect(lambda_expression == .Lambda);
 
     const function_application = "(my-func 12 8)";
+    const function_application_exp = try parse(try tokenize(function_application));
+    const function_application_out = try eval(function_application_exp, env);
+    try expect(function_application_out == .Number);
+    try expect(function_application_out.Number == 20);
+}
+
+test "lambda call" {
+    const env = try defaultEnv();
+
+    const function_def = "(def my-func (fn (a) (fn (b) (+ a b))))";
+    const function_def_exp = try parse(try tokenize(function_def));
+    const function_def_out = try eval(function_def_exp, env);
+    try expect(function_def_out == .Symbol);
+
+    const lambda_expression = env.data.get("my-func") orelse unreachable;
+    try expect(lambda_expression == .Lambda);
+
+    const partial_application = "(def partial-func (my-func 12))";
+    const partial_application_exp = try parse(try tokenize(partial_application));
+    const partial_application_out = try eval(partial_application_exp, env);
+    try expect(partial_application_out == .Symbol);
+
+    const function_application = "(partial-func 8)";
     const function_application_exp = try parse(try tokenize(function_application));
     const function_application_out = try eval(function_application_exp, env);
     try expect(function_application_out == .Number);
