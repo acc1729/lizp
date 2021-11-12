@@ -40,7 +40,7 @@ pub fn repl() anyerror!void {
         };
         var output = try res.to_string(&gpa.allocator);
         try stdout.writer().print("{s}\n", .{output});
-        &gpa.allocator.free(output);
+        _ = &gpa.allocator.free(output);
     }
 }
 
