@@ -18,7 +18,7 @@ pub const LizpExp = union(enum) {
         comptime fmt: []const u8,
         options: std.fmt.FormatOptions,
         writer: anytype,
-    ) !void {
+    ) @TypeOf(writer).Error!void {
         switch (self) {
             .Bool => |Bool| try writer.print("{}", .{Bool}),
             .Symbol => |Symbol| try writer.print("{s}", .{Symbol}),
