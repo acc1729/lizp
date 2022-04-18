@@ -13,6 +13,29 @@ pub const LizpExp = union(enum) {
     Func: fn ([]const LizpExp) LizpErr!*LizpExp,
     Lambda: *LizpLambda,
 
+    pub fn format(
+        self: LizpExp,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        switch (self) {
+            .Bool => |Bool| try writer.print("{}", .{Bool}),
+            .Symbol => |Symbol| try writer.print("{s}", .{Symbol}),
+            .Number => |Number| try writer.print("{}", .{Number}),
+            .List => |List| {
+                try writer.writeAll("( ");
+                for (List) |exp| {
+                    try exp.format(fmt, options, writer);
+                    try writer.writeByte(' ');
+                }
+                try writer.writeByte(')');
+            },
+            .Func => try writer.writeAll("Function"), // TODO what to represent a function as?
+            .Lambda => try writer.writeAll("Lambda"), // TODO what to represent a lambda as?
+        }
+    }
+
     pub fn to_string(self: LizpExp, allocator: *std.mem.Allocator) anyerror![]const u8 {
         return switch (self) {
             .Bool => if (self.Bool) allocator.dupe(u8, "true") else allocator.dupe(u8, "false"),
@@ -39,7 +62,8 @@ pub const LizpExp = union(enum) {
                     allocator.free(intermediate);
                 }
                 try string.append(')');
-                break :list string.items;
+                
+                break :list string.toOwnedSlice();
             },
             .Func => try allocator.dupe(u8, "Function"), // TODO what to represent a function as?
             .Lambda => try allocator.dupe(u8, "Lambda"), // TODO what to represent a lambda as?
