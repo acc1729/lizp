@@ -35,40 +35,6 @@ pub const LizpExp = union(enum) {
             .Lambda => try writer.writeAll("Lambda"), // TODO what to represent a lambda as?
         }
     }
-
-    pub fn to_string(self: LizpExp, allocator: std.mem.Allocator) anyerror![]const u8 {
-        return switch (self) {
-            .Bool => if (self.Bool) allocator.dupe(u8, "true") else allocator.dupe(u8, "false"),
-            .Symbol => allocator.dupe(u8, self.Symbol),
-            .Number => number: {
-                const space = ' ';
-                var num = try std.fmt.allocPrint(allocator, "{d}", .{self.Number});
-                var i: usize = 0;
-                for (num) |char, index| {
-                    if (char != space) {
-                        i = index;
-                        break;
-                    }
-                }
-                break :number num[i..num.len];
-            },
-            .List => list: {
-                var string = std.ArrayList(u8).init(allocator);
-                try string.appendSlice("( ");
-                for (self.List) |exp| {
-                    var intermediate = try exp.to_string(allocator);
-                    try string.appendSlice(intermediate);
-                    try string.append(' ');
-                    allocator.free(intermediate);
-                }
-                try string.append(')');
-
-                break :list string.toOwnedSlice();
-            },
-            .Func => try allocator.dupe(u8, "Function"), // TODO what to represent a function as?
-            .Lambda => try allocator.dupe(u8, "Lambda"), // TODO what to represent a lambda as?
-        };
-    }
 };
 
 pub const LizpLambda = struct {
@@ -299,7 +265,7 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
 
 const ta = std.testing.allocator;
 
-test "lizpExp.Bool to_string" {
+test "lizpExp.Bool format" {
     var true_res = try std.fmt.allocPrint(ta, "{}", .{LizpExp{.Bool = true}});
     defer ta.free(true_res);
     try expect(std.mem.eql(u8, true_res, "true"));
@@ -309,7 +275,7 @@ test "lizpExp.Bool to_string" {
     try expect(std.mem.eql(u8, false_res, "false"));
 }
 
-test "lizpExp.Number to_string" {
+test "lizpExp.Number format" {
     var res = try std.fmt.allocPrint(ta, "{}", .{LizpExp{ .Number = 1.234 }});
     defer ta.free(res);
     try expect(std.mem.eql(u8, res, "1.234"));
@@ -319,21 +285,19 @@ test "lizpExp.Number to_string" {
     try expect(std.mem.eql(u8, res2, "1.2345678901234"));
 }
 
-test "lizpExp.Symbol to_string" {
-    const num: LizpExp = LizpExp{ .Symbol = "my-symbol" };
-    var res = try num.to_string(ta);
+test "lizpExp.Symbol format" {
+    var res = try std.fmt.allocPrint(ta, "{}", .{LizpExp{ .Symbol = "my-symbol" }});
     defer ta.free(res);
     try expect(std.mem.eql(u8, res, "my-symbol"));
 }
 
-test "lizpExp.Func to_string" {
-    const func: LizpExp = LizpExp{ .Func = lizpSum };
-    var res = try func.to_string(ta);
+test "lizpExp.Func format" {
+    var res = try std.fmt.allocPrint(ta, "{}", .{LizpExp{ .Func = lizpSum }});
     defer ta.free(res);
     try expect(std.mem.eql(u8, res, "Function"));
 }
 
-test "lizpExp.List to_string" {
+test "lizpExp.List format" {
     const array_of_lizpexp: [3]LizpExp = .{
         LizpExp{
             .Symbol = "some-symbol",
@@ -347,7 +311,7 @@ test "lizpExp.List to_string" {
     };
     var slice_of_lizpexp = array_of_lizpexp[0..array_of_lizpexp.len];
     const exp = LizpExp{ .List = slice_of_lizpexp };
-    var res = try exp.to_string(ta);
+    var res = try std.fmt.allocPrint(ta, "{}", .{exp});
     defer ta.free(res);
     try expect(std.mem.eql(u8, res, "( some-symbol 1 2 )"));
     var another_array: [3]LizpExp = .{
@@ -361,7 +325,7 @@ test "lizpExp.List to_string" {
     };
     var another_slice = another_array[0..another_array.len];
     var another_exp = LizpExp{ .List = another_slice };
-    var another_res = try another_exp.to_string(ta);
+    var another_res = try std.fmt.allocPrint(ta, "{}", .{another_exp});
     defer ta.free(another_res);
     try expect(std.mem.eql(u8, another_res, "( left ( some-symbol 1 2 ) right )"));
 }
