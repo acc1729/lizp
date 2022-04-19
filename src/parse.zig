@@ -41,7 +41,8 @@ fn parseAtom(atom: []const u8) LizpExp {
 /// with the parsed list, and then the rest of the tokens after the ")".
 fn parseRest(tokens: [][]const u8) LizpErr!LizpExpRest {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var res = std.ArrayList(LizpExp).init(&gpa.allocator);
+    const alloc = gpa.allocator();
+    var res = std.ArrayList(LizpExp).init(alloc);
     var rest: [][]const u8 = tokens;
     while (true) {
         if (rest.len == 0) {

@@ -31,7 +31,7 @@ pub fn evalDefForm(arg_forms: []const LizpExp, env: LizpEnv) LizpErr!LizpExp {
     return key_form;
 }
 
-pub fn evalFnForm(arg_forms: []const LizpExp, alloc: *std.mem.Allocator) LizpErr!LizpExp {
+pub fn evalFnForm(arg_forms: []const LizpExp, alloc: std.mem.Allocator) LizpErr!LizpExp {
     if (arg_forms.len <= 1) return LizpErr.NotEnoughArguments;
     if (arg_forms.len >= 3) return LizpErr.UnexpectedForm;
     if (arg_forms[0] != LizpExp.List) return LizpErr.NotAList;

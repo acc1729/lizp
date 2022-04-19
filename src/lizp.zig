@@ -36,7 +36,7 @@ pub const LizpExp = union(enum) {
         }
     }
 
-    pub fn to_string(self: LizpExp, allocator: *std.mem.Allocator) anyerror![]const u8 {
+    pub fn to_string(self: LizpExp, allocator: std.mem.Allocator) anyerror![]const u8 {
         return switch (self) {
             .Bool => if (self.Bool) allocator.dupe(u8, "true") else allocator.dupe(u8, "false"),
             .Symbol => allocator.dupe(u8, self.Symbol),
@@ -170,7 +170,8 @@ fn lizpSub(list: []const LizpExp) LizpErr!*LizpExp {
 
 pub fn defaultEnv() !LizpEnv {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var env = std.StringHashMap(LizpExp).init(&gpa.allocator);
+    const alloc = gpa.allocator();
+    var env = std.StringHashMap(LizpExp).init(alloc);
     try env.put("+", LizpExp{ .Func = lizpSum });
     try env.put("-", LizpExp{ .Func = lizpSub });
     try env.put("==", LizpExp{ .Func = monotonicCompare(equal) });
@@ -183,7 +184,7 @@ pub fn defaultEnv() !LizpEnv {
 
 /// If the first form is a symbol, do a hard-coded lookup into our builtin arg_forms
 /// If it's not a symbol, or it's not in our hard-coded lookup, return null
-pub fn evalBuiltinForm(exp: LizpExp, args: []const LizpExp, env: LizpEnv, alloc: *std.mem.Allocator) LizpErr!?LizpExp {
+pub fn evalBuiltinForm(exp: LizpExp, args: []const LizpExp, env: LizpEnv, alloc: std.mem.Allocator) LizpErr!?LizpExp {
     if (exp != LizpExp.Symbol) return null;
     if (std.mem.eql(u8, exp.Symbol, "if")) {
         return try builtins.evalIfForm(args, env);
@@ -196,7 +197,7 @@ pub fn evalBuiltinForm(exp: LizpExp, args: []const LizpExp, env: LizpEnv, alloc:
     return null;
 }
 
-pub fn evalForms(forms: []const LizpExp, env: LizpEnv, alloc: *std.mem.Allocator) LizpErr![]const LizpExp {
+pub fn evalForms(forms: []const LizpExp, env: LizpEnv, alloc: std.mem.Allocator) LizpErr![]const LizpExp {
     var evaled_args = std.ArrayList(LizpExp).init(alloc);
     for (forms) |arg| {
         var evaluated_form = try eval(arg, env);
@@ -214,7 +215,7 @@ pub fn envGet(key: []const u8, env: LizpEnv) ?LizpExp {
     };
 }
 
-pub fn newEnvForLambda(params: LizpExp, args: []const LizpExp, env: LizpEnv, allocator: *std.mem.Allocator) LizpErr!LizpEnv {
+pub fn newEnvForLambda(params: LizpExp, args: []const LizpExp, env: LizpEnv, allocator: std.mem.Allocator) LizpErr!LizpEnv {
     const keys = try parseStringsFromSymbols(params, allocator);
     defer allocator.free(keys);
     if (keys.len != args.len) return LizpErr.NotEnoughArguments;
@@ -233,7 +234,7 @@ pub fn newEnvForLambda(params: LizpExp, args: []const LizpExp, env: LizpEnv, all
     };
 }
 
-pub fn parseStringsFromSymbols(symbols: LizpExp, alloc: *std.mem.Allocator) LizpErr![][]const u8 {
+pub fn parseStringsFromSymbols(symbols: LizpExp, alloc: std.mem.Allocator) LizpErr![][]const u8 {
     if (symbols != LizpExp.List) return LizpErr.NotAList;
     var symbol_strings = std.ArrayList([]const u8).init(alloc);
     for (symbols.List) |symbol| {
@@ -256,17 +257,18 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
         },
         .List => {
             var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+            const alloc = gpa.allocator();
             if (exp.List.len == 0) return LizpErr.EmptyList;
             var first_form = exp.List[0];
             const arg_forms = exp.List[1..];
 
             // Check to see if there's a builtin, and whether or not it evals well.
             // If it does, return it right away.
-            var builtin_result: LizpExp = (try evalBuiltinForm(first_form, arg_forms, env, &gpa.allocator)) orelse {
+            var builtin_result: LizpExp = (try evalBuiltinForm(first_form, arg_forms, env, alloc)) orelse {
                 var first_eval = try eval(first_form, env);
                 switch (first_eval) {
                     .Func => {
-                        const evaled_args = try evalForms(arg_forms, env, &gpa.allocator);
+                        const evaled_args = try evalForms(arg_forms, env, alloc);
                         var res = try first_eval.Func(evaled_args);
                         return res.*;
                     },
@@ -274,7 +276,7 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
                         const lambda = first_eval.Lambda.*;
                         const params = lambda.params_exp;
                         const body = lambda.body_exp;
-                        var new_env = try newEnvForLambda(params.*, arg_forms, env, &gpa.allocator);
+                        var new_env = try newEnvForLambda(params.*, arg_forms, env, alloc);
                         defer new_env.data.deinit();
                         var res = try eval(body.*, new_env);
                         return res;

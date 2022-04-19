@@ -4,11 +4,12 @@ const expect = std.testing.expect;
 /// Pre-processes the input, putting a space between each ( and )
 fn tokenizePrepass(str: []const u8) []u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const alloc = gpa.allocator();
     const neededSize1: usize = std.mem.replacementSize(u8, str, "(", " ( ");
-    var buff1 = gpa.allocator.alloc(u8, neededSize1) catch unreachable;
+    var buff1 = alloc.alloc(u8, neededSize1) catch unreachable;
     _ = std.mem.replace(u8, str, "(", " ( ", buff1);
     const neededSize2 = std.mem.replacementSize(u8, buff1, ")", " ) ");
-    var buff2 = gpa.allocator.alloc(u8, neededSize2) catch unreachable;
+    var buff2 = alloc.alloc(u8, neededSize2) catch unreachable;
     _ = std.mem.replace(u8, buff1, ")", " ) ", buff2);
     return buff2;
 }
@@ -17,7 +18,8 @@ fn tokenizePrepass(str: []const u8) []u8 {
 pub fn tokenize(str: []const u8) ![][]const u8 {
     const prepass = tokenizePrepass(str);
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var list = std.ArrayList([]const u8).init(&gpa.allocator);
+    const alloc = gpa.allocator();
+    var list = std.ArrayList([]const u8).init(alloc);
     var tokens = std.mem.tokenize(u8, prepass, " ");
     while (true) {
         try list.append(tokens.next() orelse break);
