@@ -17,14 +17,13 @@ fn nextLine(reader: anytype, buffer: []u8) ![]const u8 {
         '\n',
     )) orelse return "";
     // trim annoying windows-only carriage return character
-    if (std.builtin.os.tag == .windows) {
+    if (builtin.os.tag == .windows) {
         line = std.mem.trimRight(u8, line, "\r");
     }
     return line;
 }
 
 pub fn repl() anyerror!void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const stdout = std.io.getStdOut();
     const stdin = std.io.getStdIn();
     const env = try lizp.defaultEnv();
@@ -38,9 +37,7 @@ pub fn repl() anyerror!void {
             try stdout.writer().print("There was an error in the above expression: {s}\n", .{@errorName(err)});
             continue;
         };
-        var output = try res.to_string(&gpa.allocator);
-        try stdout.writer().print("{s}\n", .{output});
-        _ = &gpa.allocator.free(output);
+        try stdout.writer().print("{}\n", .{res});
     }
 }
 
