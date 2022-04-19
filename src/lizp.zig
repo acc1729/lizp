@@ -22,7 +22,7 @@ pub const LizpExp = union(enum) {
         switch (self) {
             .Bool => |Bool| try writer.print("{}", .{Bool}),
             .Symbol => |Symbol| try writer.print("{s}", .{Symbol}),
-            .Number => |Number| try writer.print("{}", .{Number}),
+            .Number => |Number| try writer.print("{d}", .{Number}),
             .List => |List| {
                 try writer.writeAll("( ");
                 for (List) |exp| {
@@ -62,7 +62,7 @@ pub const LizpExp = union(enum) {
                     allocator.free(intermediate);
                 }
                 try string.append(')');
-                
+
                 break :list string.toOwnedSlice();
             },
             .Func => try allocator.dupe(u8, "Function"), // TODO what to represent a function as?
@@ -297,35 +297,29 @@ pub fn eval(exp: LizpExp, env: LizpEnv) LizpErr!LizpExp {
     };
 }
 
-test "lizpExp.Bool to_string" {
-    var ta = std.testing.allocator;
+const ta = std.testing.allocator;
 
-    const true_lizp: LizpExp = LizpExp{ .Bool = true };
-    var true_res = try true_lizp.to_string(ta);
+test "lizpExp.Bool to_string" {
+    var true_res = try std.fmt.allocPrint(ta, "{}", .{LizpExp{.Bool = true}});
     defer ta.free(true_res);
     try expect(std.mem.eql(u8, true_res, "true"));
 
-    const false_lizp: LizpExp = LizpExp{ .Bool = false };
-    var false_res = try false_lizp.to_string(ta);
+    var false_res = try std.fmt.allocPrint(ta, "{}", .{LizpExp{.Bool = false}});
     defer ta.free(false_res);
     try expect(std.mem.eql(u8, false_res, "false"));
 }
 
 test "lizpExp.Number to_string" {
-    var ta = std.testing.allocator;
-    const num: LizpExp = LizpExp{ .Number = 1.234 };
-    var res = try num.to_string(ta);
+    var res = try std.fmt.allocPrint(ta, "{}", .{LizpExp{ .Number = 1.234 }});
     defer ta.free(res);
     try expect(std.mem.eql(u8, res, "1.234"));
 
-    const num2: LizpExp = LizpExp{ .Number = 1.2345678901234 };
-    var res2 = try num2.to_string(ta);
+    var res2 = try std.fmt.allocPrint(ta, "{}", .{LizpExp{ .Number = 1.2345678901234 }});
     defer ta.free(res2);
     try expect(std.mem.eql(u8, res2, "1.2345678901234"));
 }
 
 test "lizpExp.Symbol to_string" {
-    var ta = std.testing.allocator;
     const num: LizpExp = LizpExp{ .Symbol = "my-symbol" };
     var res = try num.to_string(ta);
     defer ta.free(res);
@@ -333,7 +327,6 @@ test "lizpExp.Symbol to_string" {
 }
 
 test "lizpExp.Func to_string" {
-    var ta = std.testing.allocator;
     const func: LizpExp = LizpExp{ .Func = lizpSum };
     var res = try func.to_string(ta);
     defer ta.free(res);
@@ -341,7 +334,6 @@ test "lizpExp.Func to_string" {
 }
 
 test "lizpExp.List to_string" {
-    var ta = std.testing.allocator;
     const array_of_lizpexp: [3]LizpExp = .{
         LizpExp{
             .Symbol = "some-symbol",
@@ -439,7 +431,6 @@ test "tokenize-parse-eval" {
 }
 
 test "parseStringsFromSymbols" {
-    const ta = std.testing.allocator;
     const symbols = "(symbol-0 symbol-1 symbol-2)";
     const expression = try parse(try tokenize(symbols));
     const symbol_slice = try parseStringsFromSymbols(expression, ta);
